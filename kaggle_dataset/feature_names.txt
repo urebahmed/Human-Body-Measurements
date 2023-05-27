@@ -1,0 +1,4 @@
+Input these in order
+shoulder width, chest, belly, waist, hips, arm length, height, wrist, neck, thigh, ankle
+
+

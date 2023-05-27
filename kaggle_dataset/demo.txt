@@ -1,0 +1,17 @@
+height: 180.000000  yes
+waist: 90.305983  yes
+belly: 87.174429  yes
+chest: 101.648054 yes
+wrist: 16.966160 calculated
+neck: 36.532331 calculated
+arm length: 55.735729 yes
+thigh: 56.076010 calcualted
+shoulder width: 49.869029  yes
+hips: 102.588192 yes
+ankle: 21.271146 calculated
+
+
+
+45.92, 97.53,82.36, 79.989, 92.345, 49.530642, 168, 17.01, 36.91, 50.668, 21.17
+
+49.48, 100.6967, 85.59, 89.2866, 101.887565, 55.81, 180.56, 16.92, 36.23, 56.02, 21.36
