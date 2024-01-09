@@ -12,7 +12,7 @@ import os
 import vidFeed
 from io import BytesIO
 from absl import flags
-import src.config
+# import src.config
 import sys
 import tarfile
 import tempfile

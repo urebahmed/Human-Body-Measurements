@@ -1,3 +1,7 @@
 deeplab_model
 models
 env
+opendr
+src/__pycache__
+src/tf_smpl/__pycache__
+__pycache__

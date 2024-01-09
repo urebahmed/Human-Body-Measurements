@@ -2,27 +2,15 @@
 Defines networks.
 
 @Encoder_resnet
-@Encoder_resnet_v1_101
 @Encoder_fc3_dropout
-
-@Discriminator_separable_rotations
 
 Helper:
 @get_encoder_fn_separate
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-
-
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
-
-from tensorflow.contrib.layers.python.layers.initializers import variance_scaling_initializer
-from tensorflow.python.keras.layers import Dense
-
+from tensorflow.keras import layers, models, initializers
+from tensorflow.keras.applications import ResNet50
 
 def Encoder_resnet(x, is_training=True, weight_decay=0.001, reuse=False):
     """
@@ -39,18 +27,11 @@ def Encoder_resnet(x, is_training=True, weight_decay=0.001, reuse=False):
     - Shape vector: N x 10
     - variables: tf variables
     """
-    from tensorflow.contrib.slim.python.slim.nets import resnet_v2
-    with tf.name_scope("Encoder_resnet", [x]):
-        with slim.arg_scope(
-                resnet_v2.resnet_arg_scope(weight_decay=weight_decay)):
-            net, end_points = resnet_v2.resnet_v2_50(
-                x,
-                num_classes=None,
-                is_training=is_training,
-                reuse=reuse,
-                scope='resnet_v2_50')
-            net = tf.squeeze(net, axis=[1, 2])
-    variables = tf.contrib.framework.get_variables('resnet_v2_50')
+    with tf.compat.v1.name_scope("Encoder_resnet", [x]):
+        resnet = ResNet50(weights=None, include_top=False, input_tensor=x)
+        net = layers.GlobalAveragePooling2D()(resnet.output)
+        net = tf.squeeze(net, axis=[1, 2])
+    variables = resnet.trainable_variables
     return net, variables
 
 
@@ -76,21 +57,15 @@ def Encoder_fc3_dropout(x,
     """
     if reuse:
         print('Reuse is on!')
-    with tf.variable_scope(name, reuse=reuse) as scope:
-        net = slim.fully_connected(x, 1024, scope='fc1')
-        net = slim.dropout(net, 0.5, is_training=is_training, scope='dropout1')
-        net = slim.fully_connected(net, 1024, scope='fc2')
-        net = slim.dropout(net, 0.5, is_training=is_training, scope='dropout2')
-        small_xavier = variance_scaling_initializer(
-            factor=.01, mode='FAN_AVG', uniform=True)
-        net = slim.fully_connected(
-            net,
-            num_output,
-            activation_fn=None,
-            weights_initializer=small_xavier,
-            scope='fc3')
+    with tf.compat.v1.variable_scope(name, reuse=reuse) as scope:
+        net = layers.Dense(1024, activation='relu', name='fc1')(x)
+        net = layers.Dropout(0.5, name='dropout1')(net)
+        net = layers.Dense(1024, activation='relu', name='fc2')(net)
+        net = layers.Dropout(0.5, name='dropout2')(net)
+        small_xavier = initializers.VarianceScaling(scale=.01, mode='fan_avg', distribution='uniform')
+        net = layers.Dense(num_output, activation=None, kernel_initializer=small_xavier, name='fc3')(net)
 
-    variables = tf.contrib.framework.get_variables(scope)
+    variables = net.trainable_variables
     return net, variables
 
 
@@ -117,11 +92,9 @@ def get_encoder_fn_separate(model_type):
     return encoder_fn, threed_fn
 
 
-def Discriminator_separable_rotations(
-        poses,
-        shapes,
-        weight_decay,
-):
+
+
+def Discriminator_separable_rotations(poses, shapes, weight_decay):
     """
     23 Discriminators on each joint + 1 for all joints + 1 for shape.
     To share the params on rotations, this treats the 23 rotation matrices
@@ -137,46 +110,28 @@ def Discriminator_separable_rotations(
     - prediction: N x (1+23) or N x (1+23+1) if do_joint is on.
     - variables: tf variables
     """
-    data_format = "NHWC"
-    with tf.name_scope("Discriminator_sep_rotations", [poses, shapes]):
-        with tf.variable_scope("D") as scope:
-            with slim.arg_scope(
-                [slim.conv2d, slim.fully_connected],
-                    weights_regularizer=slim.l2_regularizer(weight_decay)):
-                with slim.arg_scope([slim.conv2d], data_format=data_format):
-                    poses = slim.conv2d(poses, 32, [1, 1], scope='D_conv1')
-                    poses = slim.conv2d(poses, 32, [1, 1], scope='D_conv2')
-                    theta_out = []
-                    for i in range(0, 23):
-                        theta_out.append(
-                            slim.fully_connected(
-                                poses[:, i, :, :],
-                                1,
-                                activation_fn=None,
-                                scope="pose_out_j%d" % i))
-                    theta_out_all = tf.squeeze(tf.stack(theta_out, axis=1))
+    with tf.compat.v1.name_scope("Discriminator_sep_rotations", [poses, shapes]):
+        with tf.compat.v1.variable_scope("D") as scope:
+            poses = layers.Conv2D(32, (1, 1), padding='same', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name='D_conv1')(poses)
+            poses = layers.Conv2D(32, (1, 1), padding='same', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name='D_conv2')(poses)
+            theta_out = []
+            for i in range(0, 23):
+                theta_out.append(
+                    layers.Dense(1, activation=None, kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="pose_out_j%d" % i)(poses[:, i, :, :]))
+            theta_out_all = tf.squeeze(tf.stack(theta_out, axis=1))
 
-                    # Do shape on it's own:
-                    shapes = slim.stack(
-                        shapes,
-                        slim.fully_connected, [10, 5],
-                        scope="shape_fc1")
-                    shape_out = slim.fully_connected(
-                        shapes, 1, activation_fn=None, scope="shape_final")
-                    """ Compute joint correlation prior!"""
-                    nz_feat = 1024
-                    poses_all = slim.flatten(poses, scope='vectorize')
-                    poses_all = slim.fully_connected(
-                        poses_all, nz_feat, scope="D_alljoints_fc1")
-                    poses_all = slim.fully_connected(
-                        poses_all, nz_feat, scope="D_alljoints_fc2")
-                    poses_all_out = slim.fully_connected(
-                        poses_all,
-                        1,
-                        activation_fn=None,
-                        scope="D_alljoints_out")
-                    out = tf.concat([theta_out_all,
-                                     poses_all_out, shape_out], 1)
+            # Do shape on it's own:
+            shapes = layers.Dense(10, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="shape_fc1")(shapes)
+            shapes = layers.Dense(5, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="shape_fc2")(shapes)
+            shape_out = layers.Dense(1, activation=None, kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="shape_final")(shapes)
 
-            variables = tf.contrib.framework.get_variables(scope)
-            return out, variables
+            # Compute joint correlation prior!
+            nz_feat = 1024
+            poses_all = layers.Flatten(name='vectorize')(poses)
+            poses_all = layers.Dense(nz_feat, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="D_alljoints_fc1")(poses_all)
+            poses_all = layers.Dense(nz_feat, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="D_alljoints_fc2")(poses_all)
+            poses_all_out = layers.Dense(1, activation=None, kernel_regularizer=tf.keras.regularizers.l2(weight_decay), name="D_alljoints_out")(poses_all)
+            out = tf.concat([theta_out_all, poses_all_out, shape_out], 1)
+
+        variables = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=scope.name)
+        return out, variables
