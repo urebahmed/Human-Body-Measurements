@@ -18,9 +18,9 @@ from __future__ import print_function
 
 
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tensorflow  as slim
+from tensorflow.keras.initializers import VarianceScaling
 
-from tensorflow.contrib.layers.python.layers.initializers import variance_scaling_initializer
 from tensorflow.python.keras.layers import Dense
 
 
@@ -81,7 +81,7 @@ def Encoder_fc3_dropout(x,
         net = slim.dropout(net, 0.5, is_training=is_training, scope='dropout1')
         net = slim.fully_connected(net, 1024, scope='fc2')
         net = slim.dropout(net, 0.5, is_training=is_training, scope='dropout2')
-        small_xavier = variance_scaling_initializer(
+        small_xavier = VarianceScaling(
             factor=.01, mode='FAN_AVG', uniform=True)
         net = slim.fully_connected(
             net,

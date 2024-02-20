@@ -23,7 +23,7 @@ model_dir = osp.join(curr_path, '..', 'models')
 if not osp.exists(model_dir):
     print('Fix path to models/')
     import ipdb
-    ipdb.set_trace()
+    # ipdb.set_trace()
 SMPL_MODEL_PATH = osp.join(model_dir, 'neutral_smpl_with_cocoplus_reg.pkl')
 SMPL_FACE_PATH = osp.join(curr_path, '../src/tf_smpl', 'smpl_faces.npy')
 
@@ -60,7 +60,7 @@ flags.DEFINE_string(
 DATA_DIR = '/scratch1/projects/tf_datasets/'
 
 flags.DEFINE_string('data_dir', DATA_DIR, 'Where to save training models')
-flags.DEFINE_string('log_dir', 'logs', 'Where to save training models')
+# flags.DEFINE_string('log_dir', 'logs', 'Where to save training models')
 flags.DEFINE_string('model_dir', None, 'Where model will be saved -- filled automatically')
 flags.DEFINE_integer('log_img_step', 100, 'How often to visualize img during training')
 flags.DEFINE_integer('epoch', 100, '# of epochs to train')
